@@ -2,8 +2,8 @@
   <include file="$(find gps_odom)/launch/gps_odom.launch"/>
 
   <node pkg="gps_kf" type="gps_kf" name="gps_kf" output="screen">
-    <remap from="~imu" to="/post/attitude_eskf/filtered_imu"/>
-    <remap from="~gps_odom" to="/gps_odom/odometry"/>
+    <remap from="~imu" to="attitude_eskf/filtered_imu"/>
+    <remap from="~gps_odom" to="/odometry"/>
 
     <!-- TF frame ids for world and body -->
     <param name="world_frame_id" type="string" value="/world"/>

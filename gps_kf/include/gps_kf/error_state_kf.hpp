@@ -5,6 +5,8 @@
 #ifndef ERROR_STATE_KF_HPP
 #define ERROR_STATE_KF_HPP
 
+using namespace std;
+
 /**
  * @class ErrorStateKF
  * @brief Implementation of error-state kalman filter for position and

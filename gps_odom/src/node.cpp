@@ -6,7 +6,7 @@
  *	Created on: 31/07/2014
  *		  Author: gareth
  */
-
+#include "ros/ros.h"
 #include <gps_odom/node.hpp>
 #include <ros/package.h>
 #include <nav_msgs/Odometry.h>
@@ -14,6 +14,13 @@
 #include <Eigen/Geometry>
 #include <algorithm>
 #include <cmath>
+
+#include <message_filters/subscriber.h>
+#include <message_filters/synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
+
+
+using namespace std;
 
 namespace gps_odom {
 
@@ -27,9 +34,10 @@ Node::Node(const ros::NodeHandle &nh, const ros::NodeHandle &pnh)
   if (pkgPath_.empty()) {
     ROS_WARN("Failed to find path for package");
   }
+  
   //  ID to place on outgoing odometry
   pnh_.param<std::string>("fixed_frame", fixedFrame_, "world");
-
+  
   //  scale factor for GPS covariance
   pnh_.param<double>("gps_covariance_scale_factor", gpsCovScaleFactor_, 1.0);
   pnh_.param<bool>("publish_tf", shouldPublishTf_, false);
@@ -48,9 +56,9 @@ Node::Node(const ros::NodeHandle &nh, const ros::NodeHandle &pnh)
   subFix_.subscribe(nh_, "fix", kROSQueueSize);
   subFixTwist_.subscribe(nh_, "fix_velocity", kROSQueueSize);
 
-  subImu_.subscribe(pnh_, "imu", kROSQueueSize);
-  subHeight_.subscribe(pnh_, "pressure_height", kROSQueueSize);
-
+  subImu_.subscribe(nh_, "imu", kROSQueueSize);
+  subHeight_.subscribe(nh_, "pressure_height", kROSQueueSize);
+  
   syncGps_ = std::make_shared<SynchronizerGPS>(
       TimeSyncGPS(kROSQueueSize), subFix_, subFixTwist_, subImu_, subHeight_);
   syncGps_->registerCallback(
@@ -62,21 +70,25 @@ Node::Node(const ros::NodeHandle &nh, const ros::NodeHandle &pnh)
   pubRefPoint_ = nh_.advertise<sensor_msgs::NavSatFix>("reference", 1, true);
 
   ROS_INFO("Using a GPS covariance scale factor of %f", gpsCovScaleFactor_);
-
+  
   trajViz_.SetColor(kr::viz::colors::RED);
   trajViz_.SetAlpha(1);
   covViz_.SetColor(kr::viz::colors::RED);
   covViz_.SetAlpha(0.5);
+
 }
 
+//todo, velocity message from gps(djiros) is Vector3Stamped 
 void Node::gpsCallback(
     const sensor_msgs::NavSatFixConstPtr &navSatFix,
-    const geometry_msgs::TwistWithCovarianceStampedConstPtr &navSatTwist,
+    //const geometry_msgs::TwistWithCovarianceStampedConstPtr &navSatTwist,
+    const geometry_msgs::Vector3StampedConstPtr &navSatVel,
     const sensor_msgs::ImuConstPtr &imu,
     const pressure_altimeter::HeightConstPtr &height) {
-
-  const double lat = navSatFix->latitude;
-  const double lon = navSatFix->longitude;
+  
+  //ROS_INFO("sync gps received");
+  const double lat = navSatFix->latitude*180.0/M_PI;
+  const double lon = navSatFix->longitude*180.0/M_PI;
   const double hWGS84 = navSatFix->altitude;
   const double tYears =
       navSatFix->header.stamp.toSec() / (365 * 24 * 3600.0) + 1970;
@@ -111,7 +123,9 @@ void Node::gpsCallback(
       //  initialize using first message received
       refPoint_ = GeographicLib::LocalCartesian(lat, lon, 0); 
       refFix_ = *navSatFix;
-      
+      refFix_.latitude = refFix_.latitude*180/M_PI;
+      refFix_.longitude = refFix_.longitude*180/M_PI; 
+
       ROS_INFO("Initialized reference point to %.7f, %.7f",
                lat, lon);
     }
@@ -125,6 +139,7 @@ void Node::gpsCallback(
   //  determine magnetic declination
   double bEast, bNorth, bUp;
   magneticModel_->operator()(tYears, lat, lon, hWGS84, bEast, bNorth, bUp);
+  
   currentDeclination_ = -std::atan2(bEast, bNorth);
   const double degDec = currentDeclination_ * 180 / M_PI;
   ROS_INFO_ONCE_NAMED("gps_odom_mag_dec",
@@ -145,12 +160,15 @@ void Node::gpsCallback(
   odometry.header.stamp = navSatFix->header.stamp;
   odometry.header.frame_id = fixedFrame_;
   odometry.child_frame_id = fixedFrame_;
+  //1. orientation, from imu
   odometry.pose.pose.orientation.w = wQb.w();
   odometry.pose.pose.orientation.x = wQb.x();
   odometry.pose.pose.orientation.y = wQb.y();
   odometry.pose.pose.orientation.z = wQb.z();
+  //2. position x & y from gps
   odometry.pose.pose.position.x = locX;
   odometry.pose.pose.position.y = locY;
+  //3. positon z from altimeter
   odometry.pose.pose.position.z = height->height - refPressureHeight_;
 
   //  generate covariance (6x6 with order: x,y,z,rot_x,rot_y,rot_z)
@@ -158,12 +176,20 @@ void Node::gpsCallback(
   poseCovariance.setZero();
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
-      poseCovariance(i, j) =
-          navSatFix->position_covariance[i * 3 + j] * gpsCovScaleFactor_;
+      //poseCovariance(i, j) =
+          //navSatFix->position_covariance[i * 3 + j] * gpsCovScaleFactor_;
+      if(i == j)
+      {
+         poseCovariance(i, j) = 0.1;
+      }else
+      {
+        poseCovariance(i, j) = 0.0;
+      }
     }
   }
   //  replace covariance w/ number from altimeter
-  poseCovariance(2, 2) = height->variance;
+  poseCovariance(2, 2) = 3.0;//height->variance;
+  
 
   //  orientation: copy from IMU
   for (int i = 0; i < 3; i++) {
@@ -171,9 +197,10 @@ void Node::gpsCallback(
       poseCovariance(3 + i, 3 + j) = imu->orientation_covariance[i * 3 + j];
     }
   }
+  
 
   //  linear velocity from GPS, no angular velocity
-  odometry.twist.twist.linear = navSatTwist->twist.twist.linear;
+  odometry.twist.twist.linear = navSatVel->vector;//navSatTwist->twist.twist.linear;
   odometry.twist.twist.angular.x = 0;
   odometry.twist.twist.angular.y = 0;
   odometry.twist.twist.angular.z = 0;
@@ -184,12 +211,21 @@ void Node::gpsCallback(
   velCovariance.setZero();
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
-      velCovariance(i, j) =
-          navSatTwist->twist.covariance[(i * 6) + j] * gpsCovScaleFactor_;
+      if(i == j)
+      {
+         velCovariance(i, j) = 0.5;//todo
+      }else
+      {
+        velCovariance(i, j) = 0.0;//todo
+      }
+      
+          //navSatTwist->twist.covariance[(i * 6) + j] * gpsCovScaleFactor_;
       velCovariance(i + 3, j + 3) = -1;  //  unsupported
     }
   }
 
+  cout << "pose covariace: " << poseCovariance << endl;
+  cout << "vel covariace: " << velCovariance << endl;
   //  copy covariance to output
   for (int i = 0; i < 6; i++) {
     for (int j = 0; j < 6; j++) {
@@ -197,6 +233,9 @@ void Node::gpsCallback(
       odometry.twist.covariance[i * 6 + j] = velCovariance(i, j);
     }
   }
+
+  //pose and velocity as odometey information
+  ROS_INFO("pulish gps_odom");
   pubOdometry_.publish(odometry);
   
   //  publish reference point

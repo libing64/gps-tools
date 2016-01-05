@@ -14,6 +14,7 @@
 #include <gps_kf/Vector3WithCovarianceStamped.h>
 
 using ::gps_kf::Vector3WithCovarianceStamped;
+using namespace std;
 
 namespace gps_kf {
 
@@ -48,7 +49,11 @@ void Node::initialize() {
   covViz_.SetAlpha(0.5);
 }
 
+//> imu callback
 void Node::imuCallback(const sensor_msgs::ImuConstPtr &imu) {
+  
+  //ROS_INFO("imu received");
+
   if (!initialized_) {
     return;  //  wait for first GPS
   }
@@ -88,6 +93,7 @@ void Node::imuCallback(const sensor_msgs::ImuConstPtr &imu) {
   Qba.setIdentity();
   Qba *= accelBiasDriftStd_ * accelBiasDriftStd_;
   positionKF_.setBiasUncertainties(Qbg, Qba);
+  //predict with gyro and accel
   positionKF_.predict(gyro, varGyro, accel, varAccel, delta);
 
   //  output covariance
@@ -167,7 +173,9 @@ void Node::imuCallback(const sensor_msgs::ImuConstPtr &imu) {
 }
 
 void Node::odoCallback(const nav_msgs::OdometryConstPtr &odometry) {
+  ROS_INFO("odom received");
   static ros::Time firstTs = odometry->header.stamp;
+  cout << "odometry orientation: " << odometry->pose.pose.orientation << "   pose: " << odometry->pose.pose.position << endl;
 
   Eigen::Vector3d p, v;
   Eigen::Quaterniond q;
@@ -192,9 +200,11 @@ void Node::odoCallback(const nav_msgs::OdometryConstPtr &odometry) {
     positionKF_.initState(q, p, v);
     positionKF_.initCovariance(1e-1, 1e-4, 0.8, 0.2, 5.0);
   } else {
+    //update with q p v measurements
     if (!positionKF_.update(q, varQ, p, varP, v, varV)) {
       ROS_WARN("Warning: Kalman gain was singular in update");
     }
+    cout << "p:" << p << endl;
   }
 }
 }

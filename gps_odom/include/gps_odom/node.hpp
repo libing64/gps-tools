@@ -50,20 +50,29 @@ class Node {
 
   message_filters::Subscriber<sensor_msgs::Imu> subImu_;
   message_filters::Subscriber<sensor_msgs::NavSatFix> subFix_;
-  message_filters::Subscriber<geometry_msgs::TwistWithCovarianceStamped>
+  message_filters::Subscriber<geometry_msgs::Vector3Stamped>
       subFixTwist_;
   message_filters::Subscriber<pressure_altimeter::Height> subHeight_;
 
-  //  time sync policy for GPS data
+  //  time sync policy for GPS datacallback
   using TimeSyncGPS = message_filters::sync_policies::ApproximateTime<
-      sensor_msgs::NavSatFix, geometry_msgs::TwistWithCovarianceStamped,
-      sensor_msgs::Imu, pressure_altimeter::Height>;
+      sensor_msgs::NavSatFix, 
+      geometry_msgs::Vector3Stamped,
+      sensor_msgs::Imu, 
+      pressure_altimeter::Height>;
+
   using SynchronizerGPS = message_filters::Synchronizer<TimeSyncGPS>;
   std::shared_ptr<SynchronizerGPS> syncGps_;
 
-  void gpsCallback(
+  // void gpsCallback(
+  //     const sensor_msgs::NavSatFixConstPtr &,
+  //     const geometry_msgs::TwistWithCovarianceStampedConstPtr &navSatTwist,
+  //     const sensor_msgs::ImuConstPtr &,
+  //     const pressure_altimeter::HeightConstPtr &height);
+
+    void gpsCallback(
       const sensor_msgs::NavSatFixConstPtr &,
-      const geometry_msgs::TwistWithCovarianceStampedConstPtr &navSatTwist,
+      const geometry_msgs::Vector3StampedConstPtr &navSatVel,
       const sensor_msgs::ImuConstPtr &,
       const pressure_altimeter::HeightConstPtr &height);
 
