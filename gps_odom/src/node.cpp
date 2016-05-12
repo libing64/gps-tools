@@ -10,6 +10,7 @@
 #include <gps_odom/node.hpp>
 #include <ros/package.h>
 #include <nav_msgs/Odometry.h>
+#include <geometry_msgs/Vector3Stamped.h>
 #include <visualization_msgs/Marker.h>
 #include <Eigen/Geometry>
 #include <algorithm>
@@ -57,7 +58,7 @@ Node::Node(const ros::NodeHandle &nh, const ros::NodeHandle &pnh)
   subFixTwist_.subscribe(nh_, "fix_velocity", kROSQueueSize);
 
   subImu_.subscribe(nh_, "imu", kROSQueueSize);
-  subHeight_.subscribe(nh_, "pressure_height", kROSQueueSize);
+  subHeight_.subscribe(nh_, "height", kROSQueueSize);
   
   syncGps_ = std::make_shared<SynchronizerGPS>(
       TimeSyncGPS(kROSQueueSize), subFix_, subFixTwist_, subImu_, subHeight_);
@@ -84,9 +85,8 @@ void Node::gpsCallback(
     //const geometry_msgs::TwistWithCovarianceStampedConstPtr &navSatTwist,
     const geometry_msgs::Vector3StampedConstPtr &navSatVel,
     const sensor_msgs::ImuConstPtr &imu,
-    const pressure_altimeter::HeightConstPtr &height) {
+    const geometry_msgs::Vector3StampedConstPtr &height) {
   
-  //ROS_INFO("sync gps received");
   const double lat = navSatFix->latitude*180.0/M_PI;
   const double lon = navSatFix->longitude*180.0/M_PI;
   const double hWGS84 = navSatFix->altitude;
@@ -105,7 +105,7 @@ void Node::gpsCallback(
   if (!refInitialized_) {
     
     //  height is always taken from altimeter
-    refPressureHeight_ = height->height;
+    refHeight_ = height->vector.z;
     
     if (useFixedRef_) {
       //  initialize using user provided lat/lon
@@ -118,7 +118,7 @@ void Node::gpsCallback(
       refFix_.position_covariance_type = sensor_msgs::NavSatFix::COVARIANCE_TYPE_UNKNOWN;
       refFix_.latitude = gpsRefLat_;
       refFix_.longitude = gpsRefLon_;
-      refFix_.altitude = refPressureHeight_;
+      refFix_.altitude = refHeight_;
     } else {
       //  initialize using first message received
       refPoint_ = GeographicLib::LocalCartesian(lat, lon, 0); 
@@ -169,7 +169,7 @@ void Node::gpsCallback(
   odometry.pose.pose.position.x = locX;
   odometry.pose.pose.position.y = locY;
   //3. positon z from altimeter
-  odometry.pose.pose.position.z = height->height - refPressureHeight_;
+  odometry.pose.pose.position.z = height->vector.z - refHeight_;
 
   //  generate covariance (6x6 with order: x,y,z,rot_x,rot_y,rot_z)
   Eigen::Matrix<double, 6, 6> poseCovariance;
@@ -188,7 +188,7 @@ void Node::gpsCallback(
     }
   }
   //  replace covariance w/ number from altimeter
-  poseCovariance(2, 2) = 3.0;//height->variance;
+  poseCovariance(2, 2) = 0.5;//height->variance;
   
 
   //  orientation: copy from IMU
@@ -224,8 +224,8 @@ void Node::gpsCallback(
     }
   }
 
-  cout << "pose covariace: " << poseCovariance << endl;
-  cout << "vel covariace: " << velCovariance << endl;
+  //cout << "pose covariace: " << poseCovariance << endl;
+  //cout << "vel covariace: " << velCovariance << endl;
   //  copy covariance to output
   for (int i = 0; i < 6; i++) {
     for (int j = 0; j < 6; j++) {
@@ -235,7 +235,7 @@ void Node::gpsCallback(
   }
 
   //pose and velocity as odometey information
-  ROS_INFO("pulish gps_odom");
+  //ROS_INFO("pulish gps_odom");
   pubOdometry_.publish(odometry);
   
   //  publish reference point

@@ -16,7 +16,7 @@
 #include <ros/node_handle.h>
 
 #include <sensor_msgs/Imu.h>
-#include <sensor_msgs/FluidPressure.h>
+// #include <sensor_msgs/FluidPressure.h>
 #include <sensor_msgs/NavSatFix.h>
 #include <sensor_msgs/NavSatStatus.h>
 #include <geometry_msgs/Vector3Stamped.h>
@@ -29,7 +29,8 @@
 #include <GeographicLib/MagneticModel.hpp>
 #include <GeographicLib/LocalCartesian.hpp>
 
-#include <pressure_altimeter/Height.h>
+
+
 #include "rviz_helper/marker_visualizer.hpp"
 #include "rviz_helper/tf_publisher.hpp"
 
@@ -52,29 +53,24 @@ class Node {
   message_filters::Subscriber<sensor_msgs::NavSatFix> subFix_;
   message_filters::Subscriber<geometry_msgs::Vector3Stamped>
       subFixTwist_;
-  message_filters::Subscriber<pressure_altimeter::Height> subHeight_;
+  message_filters::Subscriber<geometry_msgs::Vector3Stamped> subHeight_;
 
   //  time sync policy for GPS datacallback
   using TimeSyncGPS = message_filters::sync_policies::ApproximateTime<
       sensor_msgs::NavSatFix, 
       geometry_msgs::Vector3Stamped,
       sensor_msgs::Imu, 
-      pressure_altimeter::Height>;
+      geometry_msgs::Vector3Stamped>;
 
   using SynchronizerGPS = message_filters::Synchronizer<TimeSyncGPS>;
   std::shared_ptr<SynchronizerGPS> syncGps_;
 
-  // void gpsCallback(
-  //     const sensor_msgs::NavSatFixConstPtr &,
-  //     const geometry_msgs::TwistWithCovarianceStampedConstPtr &navSatTwist,
-  //     const sensor_msgs::ImuConstPtr &,
-  //     const pressure_altimeter::HeightConstPtr &height);
 
     void gpsCallback(
       const sensor_msgs::NavSatFixConstPtr &,
       const geometry_msgs::Vector3StampedConstPtr &navSatVel,
       const sensor_msgs::ImuConstPtr &,
-      const pressure_altimeter::HeightConstPtr &height);
+      const geometry_msgs::Vector3StampedConstPtr &height);
 
   /// Load models from disk, if required.
   bool loadModels();
@@ -84,7 +80,7 @@ class Node {
   std::shared_ptr<GeographicLib::MagneticModel> magneticModel_;
   
   GeographicLib::LocalCartesian refPoint_;
-  double refPressureHeight_;
+  double refHeight_;
   sensor_msgs::NavSatFix refFix_;
   bool refInitialized_{false};
   
