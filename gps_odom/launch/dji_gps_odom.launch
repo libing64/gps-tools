@@ -30,5 +30,5 @@
     <param name="body_frame_id" type="string" value="/body"/>
   </node>
 
-  <node pkg="rviz" type="rviz" name="odom_rviz" args="-d $(find gps_odom)/rviz_cfg/gps_odom.rviz" />
+  <!-- <node pkg="rviz" type="rviz" name="odom_rviz" args="-d $(find gps_odom)/rviz_cfg/gps_odom.rviz" /> -->
 </launch>
