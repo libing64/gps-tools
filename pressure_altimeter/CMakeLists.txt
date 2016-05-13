@@ -9,7 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 # generate messages
-add_message_files(FILES Height.msg)
+# add_message_files(FILES Height.msg)
 generate_messages(DEPENDENCIES std_msgs)
 
 catkin_package(

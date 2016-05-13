@@ -20,8 +20,8 @@
  
   <node name="gps_odom" pkg="gps_odom" type="gps_odom" output="screen">
     <remap from="imu" to="/djiros/imu"/>
-    <remap from="height" to="/pressure_altimeter/height"/>
-    <!-- <remap from="height" to="/sonar/height"/> -->
+    <!-- <remap from="height" to="/pressure_altimeter/height"/> -->
+    <remap from="height" to="/sonar/height"/>
     <remap from="fix" to="/djiros/gps"/>
     <remap from="fix_velocity" to="/djiros/velo"/>
     <remap from="/odometry" to="/odom"/>

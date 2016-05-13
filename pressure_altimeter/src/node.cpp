@@ -7,7 +7,7 @@
  */
 
 #include <pressure_altimeter/node.hpp>
-#include <pressure_altimeter/Height.h>  //  published message
+#include <geometry_msgs/Vector3Stamped.h>
 #include <cmath>
 
 namespace galt {
@@ -17,14 +17,14 @@ Node::Node(const ros::NodeHandle &nh, const ros::NodeHandle &pnh)
     : nh_(nh), pnh_(pnh) {
   subPressure_ =
       pnh_.subscribe("pressure", 1, &Node::pressureCallback, this);
-  pubHeight_ = pnh_.advertise<::pressure_altimeter::Height>("height", 1);
+  pubHeight_ = pnh_.advertise<geometry_msgs::Vector3Stamped>("height", 1);
 
   pnh_.param("fixed_frame", worldFrameId_, std::string("world"));
 }
 
 void Node::pressureCallback(
     const sensor_msgs::FluidPressureConstPtr &pressure) {
-  ::pressure_altimeter::Height height_msg;
+  geometry_msgs::Vector3Stamped height_msg;
   height_msg.header.stamp = pressure->header.stamp;
   height_msg.header.frame_id = worldFrameId_;
 
@@ -36,14 +36,13 @@ void Node::pressureCallback(
     const double h = (1 - lhs) * kT0 / kL;
 
     //  value of jacobian to propagate variance
-    const double J = -lhs * kT0 / (kL * c * pressurePA);
-    const double h_var = J * J * (pressure->variance * 100 * 100);  //  mb to Pa
+    //const double J = -lhs * kT0 / (kL * c * pressurePA);
+    //const double h_var = J * J * (pressure->variance * 100 * 100);  //  mb to Pa
 
-    height_msg.height = h;
-    height_msg.variance = h_var;
+    height_msg.vector.z  = h;
+
   } else {
-    height_msg.height = 0;
-    height_msg.variance = -1;
+    height_msg.vector.z = 0;
   }
 
   pubHeight_.publish(height_msg);
