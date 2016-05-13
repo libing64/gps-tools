@@ -1,0 +1,8 @@
+<launch>
+	<node pkg="height_fusion" type="height_fusion" name="height_fusion" output="screen" >
+		<remap from="~height" to="/sonar/height" />
+		<remap from="~imu" to="/djiros/imu" />
+		<remap from="~filtered_height" to="/sonar/filtered_height" />
+	</node>
+
+</launch>
